@@ -111,7 +111,7 @@ async def run_clip_extractor(job_id: str, youtube_url: str):
         segments = await loop.run_in_executor(None, transcribe_audio, video_path)
 
         jobs[job_id].update({"progress": 55, "message": "AI finding viral moments..."})
-        viral_clips = await loop.run_in_executor(None, find_viral_clips, segments, duration)
+        viral_clips = await loop.run_in_executor(None, find_viral_clips, segments, duration, video_path)
 
         if not viral_clips:
             raise ValueError("No viral clips found. Try a different video.")
