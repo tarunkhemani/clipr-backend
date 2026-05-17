@@ -41,7 +41,6 @@ def validate_file(file_path: str, min_size_bytes: int = 44) -> bool:
     except Exception:
         return False
 
-
 def extract_clip(
     video_path: str,
     start_time: float,
@@ -49,47 +48,92 @@ def extract_clip(
     output_path: str,
     vertical: bool = True,
 ) -> str:
-    """
-    Extracts a clip from a video between start_time and end_time.
-    Crops to 9:16 vertical format if vertical=True.
-    Uses subprocess directly — never MoviePy reader.
-    """
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    from face_crop import smart_crop_to_vertical
 
-    # Safety clamp duration always positive
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     duration = max(0.1, end_time - start_time)
 
     if vertical:
-        vf_filter = "scale=-2:1920,crop=1080:1920"
+        # Use smart face-aware crop instead of blind center crop
+        return smart_crop_to_vertical(
+            video_path=video_path,
+            output_path=output_path,
+            start_time=start_time,
+            duration=duration,
+        )
     else:
-        vf_filter = "scale=1920:-2"
+        # Horizontal — just scale
+        command = [
+            "ffmpeg",
+            "-ss", str(start_time),
+            "-i", video_path,
+            "-t", str(duration),
+            "-vf", "scale=1920:-2",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+             "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            "-avoid_negative_ts", "make_zero",
+            "-y",
+            output_path,
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg failed:\n{result.stderr[-500:]}")
+        if not validate_file(output_path, min_size_bytes=1000):
+            raise RuntimeError("Clip extraction produced an empty file.")
+        return output_path
+# def extract_clip(
+#     video_path: str,
+#     start_time: float,
+#     end_time: float,
+#     output_path: str,
+#     vertical: bool = True,
+# ) -> str:
+#     """
+#     Extracts a clip from a video between start_time and end_time.
+#     Crops to 9:16 vertical format if vertical=True.
+#     Uses subprocess directly — never MoviePy reader.
+#     """
+#     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    command = [
-        "ffmpeg",
-        "-ss", str(start_time),
-        "-i", video_path,
-        "-t", str(duration),
-        "-vf", vf_filter,
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-movflags", "+faststart",
-        "-avoid_negative_ts", "make_zero",
-        "-y",
-        output_path,
-    ]
+#     # Safety clamp duration always positive
+#     duration = max(0.1, end_time - start_time)
 
-    result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+#     if vertical:
+#         vf_filter = "scale=-2:1920,crop=1080:1920"
+#     else:
+#         vf_filter = "scale=1920:-2"
 
-    if result.returncode != 0:
-        raise RuntimeError(f"FFmpeg clip extraction failed:\n{result.stderr[-500:]}")
+#     command = [
+#         "ffmpeg",
+#         "-ss", str(start_time),
+#         "-i", video_path,
+#         "-t", str(duration),
+#         "-vf", vf_filter,
+#         "-c:v", "libx264",
+#         "-preset", "fast",
+#         "-crf", "23",
+#         "-c:a", "aac",
+#         "-b:a", "128k",
+#         "-movflags", "+faststart",
+#         "-avoid_negative_ts", "make_zero",
+#         "-y",
+#         output_path,
+#     ]
 
-    if not validate_file(output_path, min_size_bytes=1000):
-        raise RuntimeError(f"Clip extraction produced an empty or corrupt file: {output_path}")
+#     result = subprocess.run(command, capture_output=True, text=True, timeout=300)
 
-    return output_path
+#     if result.returncode != 0:
+#         raise RuntimeError(f"FFmpeg clip extraction failed:\n{result.stderr[-500:]}")
+
+#     if not validate_file(output_path, min_size_bytes=1000):
+#         raise RuntimeError(f"Clip extraction produced an empty or corrupt file: {output_path}")
+
+#     return output_path
 def split_segments_into_chunks(segments: list, words_per_chunk: int = 4) -> list:
     """
     Breaks sentence-level segments into smaller word chunks.
