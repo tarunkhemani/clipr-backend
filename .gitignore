@@ -1,0 +1,21 @@
+# Environment & Secrets (CRITICAL)
+.env
+cookies.txt
+www.youtube.com_cookies.txt
+
+# Python Environment
+venv/
+__pycache__/
+*.pyc
+
+# Local Media Directories (Ignore heavy video files)
+clips/*
+downloads/*
+shorts/*
+uploads/*
+
+# Track the folders but not the files inside them
+!clips/.gitkeep
+!downloads/.gitkeep
+!shorts/.gitkeep
+!uploads/.gitkeep
